@@ -20,12 +20,22 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@livekit/agents": "^1.4.9",
+    "@livekit/agents-plugin-deepgram": "^1.4.9",
+    "@livekit/agents-plugin-google": "^1.4.9",
+    "@livekit/agents-plugin-openai": "^1.4.9",
+    "@livekit/agents-plugin-silero": "^1.4.9",
+    "@livekit/rtc-node": "^0.13.29",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "dotenv": "^17.4.2",
     "googleapis": "^173.0.0",
+    "langfuse": "^3.38.20",
     "livekit-server-sdk": "^2.15.5",
+    "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.4.3"
