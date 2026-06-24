@@ -1,4 +1,4 @@
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaPg } from '@prisma/adapter-pg';
 
 /**
  * Builds a PrismaPg driver adapter for the configured DATABASE_URL.
@@ -9,9 +9,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
  * CA chain verification via `rejectUnauthorized: false`.
  */
 export function createPrismaAdapter(): PrismaPg {
-  const connectionString = (process.env.DATABASE_URL ?? "").replace(
+  const connectionString = (process.env.DATABASE_URL ?? '').replace(
     /[?&]sslmode=[^&]*/,
-    "",
+    '',
   );
   return new PrismaPg({
     connectionString,

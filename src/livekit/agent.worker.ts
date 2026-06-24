@@ -5,20 +5,28 @@
  * own the process lifecycle without conflicting with NestJS.
  */
 
-import "dotenv/config";
-import { defineAgent, JobContext, cli, voice, llm, ServerOptions } from "@livekit/agents";
-import * as deepgram from "@livekit/agents-plugin-deepgram";
-import * as googlePlugin from "@livekit/agents-plugin-google";
-import * as openai from "@livekit/agents-plugin-openai";
-import { PrismaClient } from "@prisma/client";
-import { FallbackLLM } from "./fallback-llm";
-import { createPrismaAdapter } from "../appointments/prisma-adapter";
-import { BusinessConfig } from "../config/business.config";
-import { GoogleClientService } from "../calendar/google-client.service";
-import { AvailabilityService } from "../calendar/availability.service";
-import { CalendarBookingService } from "../calendar/booking.service";
-import { ToolsService } from "../booking/tools.service";
-import { LangfuseService } from "../observability/langfuse.service";
+import 'dotenv/config';
+import {
+  defineAgent,
+  JobContext,
+  cli,
+  voice,
+  llm,
+  ServerOptions,
+} from '@livekit/agents';
+import * as deepgram from '@livekit/agents-plugin-deepgram';
+import * as googlePlugin from '@livekit/agents-plugin-google';
+import * as openai from '@livekit/agents-plugin-openai';
+import { PrismaClient } from '@prisma/client';
+import { FallbackLLM } from './fallback-llm';
+import { createPrismaAdapter } from '../appointments/prisma-adapter';
+import { PrismaService } from '../appointments/prisma.service';
+import { BusinessConfig } from '../config/business.config';
+import { GoogleClientService } from '../calendar/google-client.service';
+import { AvailabilityService } from '../calendar/availability.service';
+import { CalendarBookingService } from '../calendar/booking.service';
+import { ToolsService } from '../booking/tools.service';
+import { LangfuseService } from '../observability/langfuse.service';
 
 // Bootstrap DI manually — this file runs outside the Nest container
 const prisma = new PrismaClient({ adapter: createPrismaAdapter() });
@@ -26,7 +34,13 @@ const cfg = new BusinessConfig();
 const gclient = new GoogleClientService();
 const availability = new AvailabilityService(gclient, cfg);
 const calBooking = new CalendarBookingService(gclient, cfg);
-const svcTools = new ToolsService(availability, calBooking, prisma as any);
+// ToolsService wants the Nest PrismaService, which only adds lifecycle hooks
+// over PrismaClient; the raw client is behaviourally identical for our queries.
+const svcTools = new ToolsService(
+  availability,
+  calBooking,
+  prisma as unknown as PrismaService,
+);
 const langfuse = new LangfuseService();
 
 export default defineAgent({
@@ -34,28 +48,30 @@ export default defineAgent({
     await ctx.connect();
 
     const session = await prisma.callSession.create({
-      data: { roomName: ctx.room.name ?? "unknown" },
+      data: { roomName: ctx.room.name ?? 'unknown' },
     });
 
-    const gemini = new googlePlugin.LLM({ model: "gemini-2.0-flash" });
+    const gemini = new googlePlugin.LLM({ model: 'gemini-2.0-flash' });
     // Equivalent to openai.LLM.withOllama(...) but via the full constructor so
     // we can cap maxCompletionTokens — keeps the local model's replies short,
     // which is both faster to generate and faster to speak (voice = concise).
     const ollama = new openai.LLM({
-      model: process.env.OLLAMA_MODEL ?? "qwen2.5:7b",
-      baseURL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
-      apiKey: "ollama",
+      model: process.env.OLLAMA_MODEL ?? 'qwen2.5:7b',
+      baseURL: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1',
+      apiKey: 'ollama',
       temperature: 0.4,
       maxCompletionTokens: 200,
     });
 
     // LLM_MODE: "fallback" (default) = Gemini primary + Ollama fallback,
     // "gemini" = Gemini only, "ollama" = Ollama only. Set via env for debugging.
-    const llmMode = process.env.LLM_MODE ?? "fallback";
+    const llmMode = process.env.LLM_MODE ?? 'fallback';
     const sessionLlm =
-      llmMode === "gemini" ? gemini :
-      llmMode === "ollama" ? ollama :
-      new FallbackLLM(gemini, ollama);
+      llmMode === 'gemini'
+        ? gemini
+        : llmMode === 'ollama'
+          ? ollama
+          : new FallbackLLM(gemini, ollama);
 
     const agentSession = new voice.AgentSession({
       // VAD is bundled by AgentSession (silero via @livekit/local-inference) — no explicit plugin needed.
@@ -64,7 +80,11 @@ export default defineAgent({
       // Deepgram Aura streams raw linear16 PCM. Use its native 24kHz rate —
       // forcing a server-side upsample (e.g. 48kHz) introduces within-word
       // artifacts; LiveKit resamples 24kHz -> 48kHz cleanly on its own.
-      tts: new deepgram.TTS({ model: "aura-asteria-en", encoding: "linear16", sampleRate: 24000 }),
+      tts: new deepgram.TTS({
+        model: 'aura-asteria-en',
+        encoding: 'linear16',
+        sampleRate: 24000,
+      }),
       turnHandling: {
         // Wait a touch longer after the caller stops talking before
         // declaring their turn over — avoids cutting in on natural pauses.
@@ -77,12 +97,12 @@ export default defineAgent({
 
     const now = new Date();
     const todayISO = now.toISOString().slice(0, 10); // YYYY-MM-DD
-    const todayHuman = now.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      timeZone: "UTC",
+    const todayHuman = now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
     });
 
     const instructions = `You are ${cfg.persona}, the friendly and professional front-desk receptionist at ${cfg.name}.
@@ -121,97 +141,155 @@ Rules:
       instructions,
       tools: {
         check_availability: llm.tool({
-          description: "Check open appointment slots for a given date (YYYY-MM-DD format).",
+          description:
+            'Check open appointment slots for a given date (YYYY-MM-DD format).',
           parameters: {
-            type: "object" as const,
-            properties: { date: { type: "string", description: "Date in YYYY-MM-DD format" } },
-            required: ["date"],
+            type: 'object' as const,
+            properties: {
+              date: {
+                type: 'string',
+                description: 'Date in YYYY-MM-DD format',
+              },
+            },
+            required: ['date'],
           },
-          execute: async ({ date }) =>
-            langfuse.traceTool("check_availability", { date }, () =>
-              svcTools.checkAvailability({ date }).catch((e) => ({ ok: false, error: String(e) })),
+          execute: async ({ date }: { date: string }) =>
+            langfuse.traceTool('check_availability', { date }, () =>
+              svcTools
+                .checkAvailability({ date })
+                .catch((e) => ({ ok: false, error: String(e) })),
             ),
         }),
         book_appointment: llm.tool({
-          description: "Book a car repair appointment after confirming all caller details.",
+          description:
+            'Book a car repair appointment after confirming all caller details.',
           parameters: {
-            type: "object" as const,
+            type: 'object' as const,
             properties: {
-              name: { type: "string" },
-              email: { type: "string" },
-              phone: { type: "string" },
-              vehicle: { type: "string", description: "Make, model and year e.g. Toyota Corolla 2018" },
-              service: { type: "string", description: "Service or issue description" },
-              date: { type: "string", description: "YYYY-MM-DD" },
-              time: { type: "string", description: "HH:MM in 24-hour format" },
+              name: { type: 'string' },
+              email: { type: 'string' },
+              phone: { type: 'string' },
+              vehicle: {
+                type: 'string',
+                description: 'Make, model and year e.g. Toyota Corolla 2018',
+              },
+              service: {
+                type: 'string',
+                description: 'Service or issue description',
+              },
+              date: { type: 'string', description: 'YYYY-MM-DD' },
+              time: { type: 'string', description: 'HH:MM in 24-hour format' },
             },
-            required: ["name", "email", "phone", "vehicle", "service", "date", "time"],
+            required: [
+              'name',
+              'email',
+              'phone',
+              'vehicle',
+              'service',
+              'date',
+              'time',
+            ],
           },
-          execute: async (args) =>
-            langfuse.traceTool("book_appointment", args, () =>
-              svcTools.bookAppointment(args as any).catch((e) => ({ ok: false, error: String(e) })),
+          execute: async (args: {
+            name: string;
+            email: string;
+            phone: string;
+            vehicle: string;
+            service: string;
+            date: string;
+            time: string;
+          }) =>
+            langfuse.traceTool('book_appointment', args, () =>
+              svcTools
+                .bookAppointment(args)
+                .catch((e) => ({ ok: false, error: String(e) })),
             ),
         }),
         cancel_appointment: llm.tool({
-          description: "Cancel an existing appointment by confirmation code or caller name.",
+          description:
+            'Cancel an existing appointment by confirmation code or caller name.',
           parameters: {
-            type: "object" as const,
+            type: 'object' as const,
             properties: {
-              identifier: { type: "string", description: "Confirmation code (e.g. AC-1234) or caller name" },
+              identifier: {
+                type: 'string',
+                description: 'Confirmation code (e.g. AC-1234) or caller name',
+              },
             },
-            required: ["identifier"],
+            required: ['identifier'],
           },
-          execute: async ({ identifier }) =>
-            langfuse.traceTool("cancel_appointment", { identifier }, () =>
-              svcTools.cancelAppointment({ identifier }).catch((e) => ({ ok: false, error: String(e) })),
+          execute: async ({ identifier }: { identifier: string }) =>
+            langfuse.traceTool('cancel_appointment', { identifier }, () =>
+              svcTools
+                .cancelAppointment({ identifier })
+                .catch((e) => ({ ok: false, error: String(e) })),
             ),
         }),
         reschedule_appointment: llm.tool({
-          description: "Move an existing appointment to a new date and time.",
+          description: 'Move an existing appointment to a new date and time.',
           parameters: {
-            type: "object" as const,
+            type: 'object' as const,
             properties: {
-              identifier: { type: "string", description: "Confirmation code or caller name" },
-              newDate: { type: "string", description: "New date YYYY-MM-DD" },
-              newTime: { type: "string", description: "New time HH:MM" },
+              identifier: {
+                type: 'string',
+                description: 'Confirmation code or caller name',
+              },
+              newDate: { type: 'string', description: 'New date YYYY-MM-DD' },
+              newTime: { type: 'string', description: 'New time HH:MM' },
             },
-            required: ["identifier", "newDate", "newTime"],
+            required: ['identifier', 'newDate', 'newTime'],
           },
-          execute: async (args) =>
-            langfuse.traceTool("reschedule_appointment", args, () =>
-              svcTools.rescheduleAppointment(args as any).catch((e) => ({ ok: false, error: String(e) })),
+          execute: async (args: {
+            identifier: string;
+            newDate: string;
+            newTime: string;
+          }) =>
+            langfuse.traceTool('reschedule_appointment', args, () =>
+              svcTools
+                .rescheduleAppointment(args)
+                .catch((e) => ({ ok: false, error: String(e) })),
             ),
         }),
       },
     });
 
-    agentSession.on(voice.AgentSessionEventTypes.ConversationItemAdded, async (ev) => {
-      const item = ev.item;
-      if (!("role" in item)) return;
-      const role = item.role === "user" ? ("user" as const) : ("agent" as const);
-      const contentParts: unknown[] = (item as { content?: unknown[] }).content ?? [];
-      const text = contentParts
-        .map((c) => (typeof c === "string" ? c : (c as { text?: string }).text ?? ""))
-        .join(" ")
-        .trim();
-      if (!text) return;
-      await prisma.transcriptEntry
-        .create({ data: { sessionId: session.id, role, content: text } })
-        .catch((e: Error) => console.error("transcript persist failed", e));
-    });
+    agentSession.on(
+      voice.AgentSessionEventTypes.ConversationItemAdded,
+      (ev) => {
+        const item = ev.item;
+        if (!('role' in item)) return;
+        const role =
+          item.role === 'user' ? ('user' as const) : ('agent' as const);
+        const contentParts: unknown[] =
+          (item as { content?: unknown[] }).content ?? [];
+        const text = contentParts
+          .map((c) =>
+            typeof c === 'string' ? c : ((c as { text?: string }).text ?? ''),
+          )
+          .join(' ')
+          .trim();
+        if (!text) return;
+        void prisma.transcriptEntry
+          .create({ data: { sessionId: session.id, role, content: text } })
+          .catch((e: Error) => console.error('transcript persist failed', e));
+      },
+    );
 
     await agentSession.start({ agent, room: ctx.room });
     await agentSession.say(
       `Thanks for calling ${cfg.name}, this is ${cfg.persona}. How can I help you today?`,
     );
 
-    ctx.room.on("disconnected", async () => {
+    ctx.room.on('disconnected', () => {
       const endedAt = new Date();
       const durationSeconds = Math.round(
         (endedAt.getTime() - session.startedAt.getTime()) / 1000,
       );
-      await prisma.callSession
-        .update({ where: { id: session.id }, data: { endedAt, durationSeconds } })
+      void prisma.callSession
+        .update({
+          where: { id: session.id },
+          data: { endedAt, durationSeconds },
+        })
         .catch(() => {});
     });
   },

@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { GoogleClientService } from "./google-client.service";
-import { BusinessConfig } from "../config/business.config";
+import { Injectable } from '@nestjs/common';
+import { GoogleClientService } from './google-client.service';
+import { BusinessConfig } from '../config/business.config';
 
 @Injectable()
 export class AvailabilityService {
@@ -28,7 +28,9 @@ export class AvailabilityService {
     return this.cfg.slotTimesForDay().filter((time) => {
       const s = new Date(`${date}T${time}:00Z`);
       const en = new Date(s.getTime() + this.cfg.slotMinutes * 60000);
-      const overlapping = events.filter((ev) => ev.start < en && ev.end > s).length;
+      const overlapping = events.filter(
+        (ev) => ev.start < en && ev.end > s,
+      ).length;
       return overlapping < this.cfg.capacity;
     });
   }

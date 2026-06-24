@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { Langfuse } from "langfuse";
+import { Injectable } from '@nestjs/common';
+import { Langfuse } from 'langfuse';
 
 @Injectable()
 export class LangfuseService {
@@ -9,7 +9,11 @@ export class LangfuseService {
     baseUrl: process.env.LANGFUSE_HOST,
   });
 
-  async traceTool<T>(name: string, input: unknown, fn: () => Promise<T>): Promise<T> {
+  async traceTool<T>(
+    name: string,
+    input: unknown,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     const trace = this.lf.trace({ name });
     const span = trace.span({ name, input: input as Record<string, unknown> });
     try {

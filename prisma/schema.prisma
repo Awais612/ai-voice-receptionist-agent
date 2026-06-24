@@ -26,6 +26,14 @@ enum Role {
   agent
 }
 
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
 model Appointment {
   id               String     @id @default(cuid())
   callerName       String

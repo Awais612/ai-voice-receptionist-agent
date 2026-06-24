@@ -1,5 +1,5 @@
-import { llm as lkllm, DEFAULT_API_CONNECT_OPTIONS } from "@livekit/agents";
-import type { APIConnectOptions } from "@livekit/agents";
+import { llm as lkllm, DEFAULT_API_CONNECT_OPTIONS } from '@livekit/agents';
+import type { APIConnectOptions } from '@livekit/agents';
 
 type ChatArgs = {
   chatCtx: lkllm.ChatContext;
@@ -79,19 +79,23 @@ class FallbackLLMStream extends lkllm.LLMStream {
     // Circuit breaker: if the primary recently failed, skip it entirely so we
     // don't waste ~10s on Gemini retries every turn while it's quota-capped.
     if (this.parent.isPrimaryTripped(Date.now())) {
-      this.logger.info("FallbackLLM: primary tripped, going straight to secondary (Ollama)");
-      await this.streamFrom(this.fallback, "fallback", false);
+      this.logger.info(
+        'FallbackLLM: primary tripped, going straight to secondary (Ollama)',
+      );
+      await this.streamFrom(this.fallback, 'fallback', false);
       return;
     }
 
     try {
-      const used = await this.streamFrom(this.primary, "primary", true);
+      const used = await this.streamFrom(this.primary, 'primary', true);
       if (used) return;
-      this.logger.warn("primary LLM produced no output; falling back to secondary");
+      this.logger.warn(
+        'primary LLM produced no output; falling back to secondary',
+      );
     } catch (err) {
       this.logger.warn(
         { err: String(err) },
-        "primary LLM failed before emitting; falling back to secondary",
+        'primary LLM failed before emitting; falling back to secondary',
       );
     }
 
@@ -100,8 +104,8 @@ class FallbackLLMStream extends lkllm.LLMStream {
     this.parent.tripPrimary(Date.now());
 
     // Fallback path — no timeout guard, this is the last resort.
-    this.logger.info("FallbackLLM: invoking secondary (Ollama) LLM");
-    await this.streamFrom(this.fallback, "fallback", false);
+    this.logger.info('FallbackLLM: invoking secondary (Ollama) LLM');
+    await this.streamFrom(this.fallback, 'fallback', false);
   }
 
   /**
@@ -135,7 +139,9 @@ class FallbackLLMStream extends lkllm.LLMStream {
         if (result.done) break;
         if (!emittedAny) {
           firstChunkMs = Date.now() - startMs;
-          this.logger.info(`FallbackLLM[${which}]: first chunk after ${firstChunkMs}ms`);
+          this.logger.info(
+            `FallbackLLM[${which}]: first chunk after ${firstChunkMs}ms`,
+          );
         }
         emittedAny = true;
         chunkCount++;
@@ -156,24 +162,15 @@ class FallbackLLMStream extends lkllm.LLMStream {
   }
 
   private withFirstChunkTimeout<T>(p: Promise<T>, which: string): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => {
         reject(
           new Error(
             `${which} LLM did not emit within ${FIRST_CHUNK_TIMEOUT_MS}ms (treated as hang)`,
           ),
         );
       }, FIRST_CHUNK_TIMEOUT_MS);
-      p.then(
-        (v) => {
-          clearTimeout(timer);
-          resolve(v);
-        },
-        (e) => {
-          clearTimeout(timer);
-          reject(e);
-        },
-      );
     });
+    return Promise.race([p, timeout]);
   }
 }

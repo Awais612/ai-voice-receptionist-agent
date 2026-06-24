@@ -3,9 +3,9 @@ import {
   Logger,
   OnApplicationBootstrap,
   OnApplicationShutdown,
-} from "@nestjs/common";
-import { ChildProcess, spawn } from "child_process";
-import { resolve } from "path";
+} from '@nestjs/common';
+import { ChildProcess, spawn } from 'child_process';
+import { resolve } from 'path';
 
 @Injectable()
 export class AgentBootstrap
@@ -15,27 +15,29 @@ export class AgentBootstrap
   private child?: ChildProcess;
 
   onApplicationBootstrap() {
-    const workerPath = resolve(__dirname, "agent.worker.js");
-    const child = spawn(process.execPath, [workerPath, "start"], {
+    const workerPath = resolve(__dirname, 'agent.worker.js');
+    const child = spawn(process.execPath, [workerPath, 'start'], {
       env: { ...process.env },
-      stdio: "inherit",
+      stdio: 'inherit',
     });
     this.child = child;
-    child.on("error", (e) => this.logger.error("Agent worker failed to start", e));
-    child.on("exit", (code) => {
+    child.on('error', (e) =>
+      this.logger.error('Agent worker failed to start', e),
+    );
+    child.on('exit', (code) => {
       if (code !== 0 && code !== null) {
         this.logger.error(`Agent worker exited with code ${code}`);
       }
     });
-    this.logger.log("Agent worker process started");
+    this.logger.log('Agent worker process started');
   }
 
   // Ensure the spawned worker is torn down whenever Nest shuts down —
   // otherwise watch-mode reloads leave it holding port 8081 (EADDRINUSE).
   onApplicationShutdown() {
     if (this.child && !this.child.killed) {
-      this.child.kill("SIGTERM");
-      this.logger.log("Agent worker process terminated");
+      this.child.kill('SIGTERM');
+      this.logger.log('Agent worker process terminated');
     }
   }
 }

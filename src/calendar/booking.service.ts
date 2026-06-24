@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { GoogleClientService } from "./google-client.service";
-import { BusinessConfig } from "../config/business.config";
+import { Injectable } from '@nestjs/common';
+import { GoogleClientService } from './google-client.service';
+import { BusinessConfig } from '../config/business.config';
 
 export interface BookingInput {
   name: string;
@@ -29,7 +29,7 @@ export class CalendarBookingService {
     const { start, end } = this.range(p.date, p.time);
     const res = await this.google.getCalendar().events.insert({
       calendarId: this.google.calendarId,
-      sendUpdates: "all",
+      sendUpdates: 'all',
       requestBody: {
         summary: `${p.service} — ${p.name} (${p.vehicle})`,
         description: `Phone: ${p.phone}\nVehicle: ${p.vehicle}\nService: ${p.service}`,
@@ -45,7 +45,7 @@ export class CalendarBookingService {
     await this.google.getCalendar().events.delete({
       calendarId: this.google.calendarId,
       eventId,
-      sendUpdates: "all",
+      sendUpdates: 'all',
     });
   }
 
@@ -54,7 +54,7 @@ export class CalendarBookingService {
     await this.google.getCalendar().events.patch({
       calendarId: this.google.calendarId,
       eventId,
-      sendUpdates: "all",
+      sendUpdates: 'all',
       requestBody: { start: { dateTime: start }, end: { dateTime: end } },
     });
   }
